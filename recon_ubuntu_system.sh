@@ -1,5 +1,13 @@
 #!/bin/bash
 
+# Instalar inxi (si no está instalado ya)
+if ! command -v inxi &> /dev/null
+then
+    echo "inxi no está instalado. Instalando..."
+    sudo apt update
+    sudo apt install -y inxi
+fi
+
 # Obtener el nombre de la máquina
 nombre_maquina=$(hostname)
 
@@ -26,45 +34,38 @@ save_output() {
     eval $command >> "${output_dir}/${filename}.txt"
     echo -e "\n\n" >> "${output_dir}/${filename}.txt"
 }
-
 # Información del sistema
-save_output "lsb_release -a && echo '================================================' && uname -a && echo '================================================' && uptime" "system_info" "System Information"
+save_output "lsb_release -a" "system_info" "System Information"
 
 # Hardware
-save_output "echo 'CPU Info:' && cat /proc/cpuinfo && echo '================================================' && echo 'CPU Details:' && lscpu && echo '================================================' && echo 'Memory Info:' && cat /proc/meminfo && echo '================================================' && echo 'Block Devices:' && lsblk && echo '================================================' && echo 'Disk Usage:' && df -h && echo '================================================' && echo 'Graphics Card:' && lspci | grep VGA && echo '================================================' && echo 'Video Hardware:' && lshw -c video && echo '================================================' && echo 'USB Devices:' && lsusb" "hardware_info" "Hardware Information"
+save_output "inxi -C" "cpu_info" "CPU Information"
+save_output "inxi -D" "disk_info" "Disk Information"
+save_output "inxi -P" "partition_info" "Partition Information"
+save_output "inxi -G" "graphics_card_info" "Graphics Card Information"
+save_output "inxi -M" "machine_info" "Machine Model Information"
+save_output "inxi -Mxx" "machine_detail_info" "Machine Detail Information"
+save_output "inxi -MMS" "motherboard_info" "Motherboard Information"
+save_output "inxi -B" "bios_info" "BIOS Information"
 
 # Red
-save_output "echo 'Network Configuration:' && ifconfig && echo '================================================' && echo 'IP Addresses:' && ip a && echo '================================================' && echo 'Network Statistics:' && netstat && echo '================================================' && echo 'Socket Statistics:' && ss && echo '================================================' && echo 'Firewall Status:' && sudo ufw status" "network_info" "Network Information"
+save_output "ip addr" "network_info" "Network Information"
+save_output "sudo ss -tulwn" "network_connections" "Network Connections"
+save_output "sudo ufw status verbose" "firewall_status" "Firewall Status"
+save_output "sudo iptables -L -v -n" "iptables_rules" "IPTables Rules"
 
 # Software
-save_output "echo 'Installed Packages:' && dpkg -l && echo '================================================' && echo 'Apt Packages:' && apt list --installed && echo '================================================' && echo 'Service Status:' && service --status-all && echo '================================================' && echo 'Systemd Units:' && systemctl list-units" "software_info" "Software Information"
+save_output "sudo apt list --upgradable" "upgradable_packages" "Upgradable Packages"
 
 # Usuarios y Grupos
-save_output "echo 'User Accounts:' && cat /etc/passwd && echo '================================================' && echo 'Password Entries:' && getent passwd && echo '================================================' && echo 'Groups:' && cat /etc/group && echo '================================================' && echo 'Group Entries:' && getent group && echo '================================================' && echo 'Logged-in Users:' && w && echo '================================================' && echo 'Currently Logged Users:' && who" "users_groups_info" "Users and Groups Information"
+save_output "cut -d: -f1 /etc/passwd" "user_list" "User List"
+save_output "sudo cat /etc/pam.d/common-auth" "pam_configuration" "PAM Configuration"
+save_output "systemctl --failed" "failed_units" "Failed Systemd Units"
 
 # Rendimiento y Monitoreo
-save_output "echo 'Top Processes:' && top -b -n 1 && echo '================================================' && echo 'Process List:' && ps aux && echo '================================================' && echo 'Process Tree:' && pstree" "performance_monitoring_info" "Performance and Monitoring Information"
-
-# Periféricos
-save_output "echo 'Printer Status:' && lpstat -p && echo '================================================' && echo 'Printer Devices:' && lpinfo -v && echo '================================================' && echo 'Input Devices:' && xinput list" "peripherals_info" "Peripherals Information"
-
-# Entorno de Escritorio
-save_output "echo 'Desktop Configuration Dump:' && dconf dump /" "desktop_environment_info" "Desktop Environment Information"
-
-# Información de arranque
-save_output "echo 'Boot Messages:' && dmesg && echo '================================================' && echo 'Boot Log:' && cat /var/log/boot.log && echo '================================================' && echo 'Boot Services:' && systemctl list-unit-files --type=service" "boot_info" "Boot Information"
-
-# Información del BIOS/UEFI
-save_output "echo 'BIOS/UEFI Information:' && dmidecode" "bios_uefi_info" "BIOS/UEFI Information"
+save_output "du -sh /home /root /var | sort -h" "disk_usage" "Disk Usage"
 
 # Logs del sistema
-save_output "echo 'System Log:' && cat /var/log/syslog && echo '================================================' && echo 'Journal Log:' && journalctl" "system_logs" "System Logs"
-
-# Tareas programadas
-save_output "echo 'User Cron Jobs:' && crontab -l && echo '================================================' && echo 'System Cron Jobs:' && cat /etc/crontab" "scheduled_tasks_info" "Scheduled Tasks Information"
-
-# Variables de entorno
-save_output "echo 'Environment Variables:' && printenv" "environment_variables_info" "Environment Variables Information"
+save_output "sudo tail -n 20 /var/log/syslog" "recent_syslog" "Recent System Log"
 
 # Lista de archivos críticos del sistema a copiar
 # Nota: Algunos archivos pueden requerir permisos de superusuario para ser accedidos
@@ -100,11 +101,4 @@ done
 # Comprimir todos los archivos en un archivo con nombre específico
 tar -czvf "${nombre_maquina}-${direccion_mac}-${fecha}.tar.gz" -C "$output_dir" .
 
-
-
-# Enviar los datos al correo
-
-# Limpiar los archivos de texto, si no se desean mantener después de la compresión
-# rm -r "$output_dir"
-
-# Fin del script
+# Fin del script.
